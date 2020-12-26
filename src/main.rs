@@ -17,12 +17,12 @@ struct YamlSubstance {
 }
 
 fn main() {
-    run();
+    let filecontent = fs::read_to_string("assets/demo.yaml").unwrap();
+    run(&filecontent);
 }
 
-fn run() -> Result<(), &'static str> {
-    let filecontent = fs::read_to_string("assets/demo.yaml").unwrap();
-    let content: YamlBody = serde_yaml::from_str(&filecontent).unwrap();
+fn run(yaml_str: &str) -> Result<(), &'static str> {
+    let content: YamlBody = serde_yaml::from_str(&yaml_str).unwrap();
 
     let substances = content
         .substances
@@ -50,4 +50,30 @@ fn run() -> Result<(), &'static str> {
     println!("{:?}", mix);
 
     return Ok(());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_and_calc() {
+        let yaml = "---
+temperature: 298
+substances:
+  ethanole:
+    fraction: 0.5
+    groups:
+      - \"1:2\"
+      - \"2:1\"
+      - \"14:1\"
+  benzene:
+    fraction: 0.5
+    groups:
+      - \"9:6\"
+        ";
+
+        let res = run(yaml);
+        assert!(res.is_ok());
+    }
 }
