@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fs;
 
 use serde_derive::{Serialize, Deserialize};
+use unifac::{calc, FunctionalGroup, Substance};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct YamlBody {
@@ -15,17 +16,30 @@ struct YamlSubstance {
     groups: Vec<String>,
 }
 
-fn main()  {
+fn main() {
+    run();
+}
+
+fn run() -> Result<(), &'static str> {
     let filecontent = fs::read_to_string("assets/demo.yaml").unwrap();
     let content: YamlBody = serde_yaml::from_str(&filecontent).unwrap();
-    println!("Temperature: {:?}", content.temperature);
-    for (name, substance) in content.substances {
-        println!("{} with {} groups, fraction: {}", name, substance.groups.len(), substance.fraction);
-        for group in substance.groups {
-            let g: Vec<&str> = group.split(":").collect();
-            let id = str::parse::<usize>(g[0]).unwrap();
-            let count = str::parse::<usize>(g[1]).unwrap();
-            println!("\tGroup {:?}: {:?} times", id, count);
-        }
-    }
+
+    let substances = content.substances.iter().map(|(n, s)| {
+        let g = s.groups.iter().map(|g| {
+            let data: Vec<&str> = g.split(":").collect();
+            let id = str::parse::<u8>(data[0]).unwrap();
+            let count = str::parse::<f64>(data[1]).unwrap();
+            FunctionalGroup::from(id, count)
+        }).collect::<Result<Vec<FunctionalGroup>, &'static str>>()?;
+        Ok(Substance {
+            fraction: s.fraction,
+            functional_groups: g,
+            gamma: None,
+        })
+    }).collect::<Result<Vec<Substance>, &'static str>>()?;
+
+    let mix = calc(substances, content.temperature)?;
+    println!("{:?}", mix);
+    
+    return Ok(());
 }
