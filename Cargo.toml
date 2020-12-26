@@ -11,3 +11,6 @@ serde = "1.0"
 serde_derive = "1.0"
 serde_yaml = "0.8"
 unifac = {path = "../unifac", version = "0.1"}
+
+[dev-dependencies]
+rusty-hook = "^0.11.2"
