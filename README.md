@@ -1,7 +1,7 @@
 CLI application utilizing the [unifac crate](https://github.com/sarcaustech/unifac).
 
 # Setup
-`unifac` crate is used as local dependency. Therefore, both projects are assumed to be located in the same parent directory. Crate is referenced with `../unifac`.
+`unifac` crate is used as local dependency. Therefore, both projects are assumed to be located in the same parent directory. Crate is referenced with `../unifac`. Installation is done via `cargo install --path <PATH TO CRATE>`
 
 # Usage (PoC)
 Program takes a YAML file as its input. YAML structure is excected as:
@@ -23,3 +23,4 @@ For group IDs, see [used data source](http://www.ddbst.com/published-parameters-
 The program itself can be called using:
 ```unifac-cli [OPTIONS] <YAML-FILE>```
 The output will be printed to stdout, unless a output file is set with `-o`.
+For more help on these options use `--help`.

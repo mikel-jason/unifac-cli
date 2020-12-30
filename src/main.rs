@@ -7,15 +7,22 @@ use unifac::{calc, FunctionalGroup, Substance};
 use clap::{App, Arg};
 
 #[derive(Debug, Serialize, Deserialize)]
-struct YamlBody {
+struct YamlBody<T> {
     temperature: f64,
-    substances: HashMap<String, YamlSubstance>,
+    substances: HashMap<String, T>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 struct YamlSubstance {
     fraction: f64,
     groups: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct YamlOutSubstance {
+    fraction: f64,
+    groups: Vec<String>,
+    gamma: f64,
 }
 
 fn main() {
@@ -63,10 +70,10 @@ fn main() {
     }
 }
 
-fn run(yaml_str: &str) -> Result<String, &'static str> {
-    let content: YamlBody = match serde_yaml::from_str(&yaml_str) {
+fn run(yaml_str: &str) -> Result<String, String> {
+    let content: YamlBody<YamlSubstance> = match serde_yaml::from_str(&yaml_str) {
         Ok(c) => c,
-        Err(_) => return Err("Invalid syntax in input file!"),
+        Err(_) => return Err(String::from("Invalid syntax in input file!")),
     };
 
     let substances = content
@@ -80,21 +87,59 @@ fn run(yaml_str: &str) -> Result<String, &'static str> {
                     let data: Vec<&str> = group.split(":").collect();
                     let id = match str::parse::<u8>(data[0]) {
                         Ok(i) => i,
-                        Err(_) => return Err("Invalid syntax in input file!"),
+                        Err(_) => {
+                            return Err(format!("Error parsing groups of substance {}", name))
+                        }
                     };
                     let count = match str::parse::<f64>(data[1]) {
                         Ok(i) => i,
-                        Err(_) => return Err("Invalid syntax in input file!"),
+                        Err(_) => {
+                            return Err(format!("Error parsing groups of substance {}", name))
+                        }
                     };
-                    FunctionalGroup::from(id, count)
+                    match FunctionalGroup::from(id, count) {
+                        Ok(c) => Ok(c),
+                        Err(s) => Err(String::from(s)),
+                    }
                 })
-                .collect::<Result<Vec<FunctionalGroup>, &'static str>>()?;
+                .collect::<Result<Vec<FunctionalGroup>, String>>()?;
             Ok(Substance::from_name(name, substance.fraction, groups))
         })
-        .collect::<Result<Vec<Substance>, &'static str>>()?;
+        .collect::<Result<Vec<Substance>, String>>()?;
 
     let mix = calc(substances, content.temperature)?;
-    let yaml_string = serde_yaml::to_string(&mix).unwrap();
+
+    let substance_map = mix
+        .iter()
+        .map(|substance| {
+            let groups = substance
+                .functional_groups
+                .iter()
+                .map(|group| {
+                    let group_str = format!("{}:{}", group.id, group.nu);
+                    return String::from(group_str);
+                })
+                .collect::<Vec<String>>();
+            return (
+                substance.name.clone(),
+                YamlOutSubstance {
+                    fraction: substance.fraction,
+                    groups,
+                    gamma: substance.gamma.unwrap(),
+                },
+            );
+        })
+        .collect::<HashMap<String, YamlOutSubstance>>();
+
+    let yamlbody = YamlBody {
+        temperature: content.temperature,
+        substances: substance_map,
+    };
+
+    let yaml_string = match serde_yaml::to_string(&yamlbody) {
+        Ok(c) => c,
+        Err(_) => return Err(String::from("Could not parse result")),
+    };
 
     return Ok(yaml_string);
 }
