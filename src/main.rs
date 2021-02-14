@@ -1,3 +1,5 @@
+#![feature(test)]
+
 use std::collections::HashMap;
 use std::fs;
 
@@ -10,6 +12,14 @@ use clap::{App, Arg};
 struct YamlBody<T> {
     temperature: f64,
     substances: HashMap<String, T>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct YamlBenchBody<T> {
+    temperature: f64,
+    substances: HashMap<String, T>,
+    difftemp: Vec<String>,
+    fractions: Vec<Vec<f64>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -39,6 +49,12 @@ fn main() {
                 .takes_value(true),
         )
         .arg(
+            Arg::with_name("benchmark")
+                .short("b")
+                .long("benchmark")
+                .help("Runs benchmark"),
+        )
+        .arg(
             Arg::with_name("input")
                 .help("Specifies input file")
                 .required(true)
@@ -53,13 +69,24 @@ fn main() {
             return;
         }
     };
-    let output = match run(&filecontent) {
-        Ok(o) => o,
-        Err(s) => {
-            eprintln!("{}\n", s);
-            return;
+    let output: String;
+    if matches.is_present("benchmark") {
+        output = match run_benchmark(&filecontent) {
+            Ok(o) => o,
+            Err(s) => {
+                eprintln!("{}\n", s);
+                return;
+            }
         }
-    };
+    } else {
+        output = match run(&filecontent) {
+            Ok(o) => o,
+            Err(s) => {
+                eprintln!("{}\n", s);
+                return;
+            }
+        };
+    }
     if matches.is_present("output") {
         match fs::write(matches.value_of("output").unwrap(), output) {
             Ok(_) => return,
@@ -68,6 +95,67 @@ fn main() {
     } else {
         println!("{}", output);
     }
+}
+
+fn time_calc1000(substances: Vec<Substance>, temperature: f64) -> u128 {
+    let start = std::time::Instant::now();
+    for _ in 0..10_000 {
+        calc(substances.clone(), temperature).expect("Something went terribly wrong!");
+    }
+    let elapsed = start.elapsed();
+    elapsed.as_millis()
+}
+
+fn run_benchmark(yaml_str: &str) -> Result<String, String> {
+    let content: YamlBenchBody<YamlSubstance> = match serde_yaml::from_str(&yaml_str) {
+        Ok(c) => c,
+        Err(_) => return Err(String::from("Invalid syntax in input file!")),
+    };
+
+    let mut result = String::new();
+
+    for i in 0..1000 {
+        let mut substances = Vec::new();
+        let mut j = 0;
+        for name in content.substances.keys() {
+            let groups = content.substances[name]
+                .groups
+                .iter()
+                .map(|group| {
+                    let data: Vec<&str> = group.split(":").collect();
+                    let id = match str::parse::<u8>(data[0]) {
+                        Ok(i) => i,
+                        Err(_) => {
+                            return Err(format!("Error parsing groups of substance {}", name))
+                        }
+                    };
+                    let count = match str::parse::<f64>(data[1]) {
+                        Ok(i) => i,
+                        Err(_) => {
+                            return Err(format!("Error parsing groups of substance {}", name))
+                        }
+                    };
+                    match FunctionalGroup::from(id, count) {
+                        Ok(c) => Ok(c),
+                        Err(s) => Err(String::from(s)),
+                    }
+                })
+                .collect::<Result<Vec<FunctionalGroup>, String>>()?;
+            substances.push(Substance::from_name(name, content.fractions[i][j], groups));
+
+            j += 1;
+        }
+
+        let mix = time_calc1000(
+            substances,
+            content.temperature + content.difftemp[i].parse::<f64>().unwrap(),
+        );
+
+        result += &format!("{}, {}\n", i, mix);
+        println!("{}, {}", i, mix);
+    }
+
+    Ok(result)
 }
 
 fn run(yaml_str: &str) -> Result<String, String> {

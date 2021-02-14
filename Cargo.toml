@@ -10,7 +10,7 @@ edition = "2018"
 serde = "1.0"
 serde_derive = "1.0"
 serde_yaml = "0.8"
-unifac = "0.1.1"
+unifac = { path = "../unifac" }
 clap = "2.33.0"
 
 [dev-dependencies]
