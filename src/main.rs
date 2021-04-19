@@ -97,15 +97,6 @@ fn main() {
     }
 }
 
-fn time_calc1000(substances: Vec<Substance>, temperature: f64) -> u128 {
-    let start = std::time::Instant::now();
-    for _ in 0..10_000 {
-        calc(substances.clone(), temperature).expect("Something went terribly wrong!");
-    }
-    let elapsed = start.elapsed();
-    elapsed.as_millis()
-}
-
 fn run_benchmark(yaml_str: &str) -> Result<String, String> {
     let content: YamlBenchBody<YamlSubstance> = match serde_yaml::from_str(&yaml_str) {
         Ok(c) => c,
@@ -113,8 +104,9 @@ fn run_benchmark(yaml_str: &str) -> Result<String, String> {
     };
 
     let mut result = String::new();
+    let mut inputs: Vec<(Vec<Substance>, f64)> = Vec::new();
 
-    for i in 0..1000 {
+    for i in 0..10000 {
         let mut substances = Vec::new();
         let mut j = 0;
         for name in content.substances.keys() {
@@ -141,18 +133,30 @@ fn run_benchmark(yaml_str: &str) -> Result<String, String> {
                     }
                 })
                 .collect::<Result<Vec<FunctionalGroup>, String>>()?;
-            substances.push(Substance::from_name(name, content.fractions[i][j], groups));
+            substances.push(Substance::from_name(
+                name,
+                content.fractions[i % 1000][j],
+                groups,
+            ));
 
             j += 1;
         }
+        let temp = content.temperature + content.difftemp[i % 1000].parse::<f64>().unwrap();
+        inputs.push((substances, temp));
+    }
 
-        let mix = time_calc1000(
-            substances,
-            content.temperature + content.difftemp[i].parse::<f64>().unwrap(),
-        );
+    for i in 0..1000 {
+        let start = std::time::Instant::now();
+        for j in 0..10_000 {
+            std::hint::black_box(
+                calc(inputs[j].0.clone(), inputs[j].1).expect("Something went terribly wrong!"),
+            );
+        }
+        let elapsed = start.elapsed();
+        let timing = elapsed.as_millis();
 
-        result += &format!("{}, {}\n", i, mix);
-        println!("{}, {}", i, mix);
+        result += &format!("{}, {}\n", i, timing);
+        println!("{}, {}", i, timing);
     }
 
     Ok(result)
